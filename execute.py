@@ -35,7 +35,8 @@ from prepare import (
 # ---------------------------------------------------------------------------
 
 LIVE_MODE = False               # PAPER by default — only change explicitly
-CHECK_INTERVAL = 3600           # seconds between re-evaluations (1 hour)
+CHECK_INTERVAL = 300            # seconds between re-evaluations (5 minutes)
+LIVE_CANDLE_INTERVAL = "1h"     # candle resolution — must match backtest for consistent signals
 MAX_DAILY_LOSS_PCT = 5.0        # kill switch: max daily loss as % of capital
 MAX_POSITION_USD = 50_000       # max notional per position
 DRY_RUN = True                  # if True, log trades but don't execute
@@ -257,15 +258,47 @@ def run_strategy_live(trader, once: bool = False, interval: int = CHECK_INTERVAL
         print(f"{'='*60}")
 
         try:
-            # Refresh data
-            print("Downloading latest data...")
-            download_all_data(lookback_days=min(LOOKBACK_DAYS, 30))
+            # Refresh 1h candles into separate live files
+            print(f"Downloading latest data (1h candles)...")
+            live_lookback = min(LOOKBACK_DAYS, 90)
+            for asset in ASSETS:
+                from prepare import download_candles, download_funding, DATA_DIR, CANDLE_INTERVAL
+                import os
+                candle_path = os.path.join(DATA_DIR, f"{asset}_candles_live.parquet")
+                funding_path = os.path.join(DATA_DIR, f"{asset}_funding.parquet")
+                candles_df = download_candles(asset, live_lookback, interval="1h")
+                if len(candles_df) > 0:
+                    candles_df.to_parquet(candle_path, index=False)
+                # Funding already shared, skip if recent
+                if not os.path.exists(funding_path):
+                    funding_df = download_funding(asset, live_lookback)
+                    if len(funding_df) > 0:
+                        funding_df.to_parquet(funding_path, index=False)
 
-            # Load features
+            # Load features from live files
             features = {}
             prices = {}
             for asset in ASSETS:
-                df = load_market_data(asset)
+                import os
+                from prepare import DATA_DIR
+                candle_path = os.path.join(DATA_DIR, f"{asset}_candles_live.parquet")
+                funding_path = os.path.join(DATA_DIR, f"{asset}_funding.parquet")
+                df = pd.read_parquet(candle_path)
+                df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
+                if os.path.exists(funding_path):
+                    funding = pd.read_parquet(funding_path)
+                    funding["timestamp"] = pd.to_datetime(funding["timestamp"], utc=True)
+                    df = pd.merge_asof(df.sort_values("timestamp"),
+                                       funding[["timestamp", "funding_rate", "premium"]].sort_values("timestamp"),
+                                       on="timestamp", direction="backward")
+                    df["funding_rate"] = df["funding_rate"].fillna(0.0)
+                    df["premium"] = df["premium"].fillna(0.0)
+                else:
+                    df["funding_rate"] = 0.0
+                    df["premium"] = 0.0
+                df = df.reset_index(drop=True)
+                df_feat = compute_base_features(df)
+                df_feat = df_feat.set_index("timestamp")
                 df_feat = compute_base_features(df)
                 df_feat = df_feat.set_index("timestamp")
                 features[asset] = df_feat

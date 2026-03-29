@@ -1,6 +1,6 @@
 """
-Autotrading strategy. Single file, agent-modifiable.
-This is the ONLY file the autonomous agent edits.
+Autotrading strategy — BTC perpetual futures, 3x leverage.
+Can go long, short, or flat. $500 capital.
 
 Usage: uv run strategy.py
 """
@@ -12,22 +12,21 @@ import pandas as pd
 # Tunable Parameters (agent modifies these)
 # ---------------------------------------------------------------------------
 
-# MA crossover
-FAST_MA = 10                    # fast moving average period (hours)
-SLOW_MA = 42                    # slow moving average period (hours)
-SPREAD_NORM_WINDOW = 72         # window for normalizing MA spread
+# Trend detection
+FAST_MA = 12                    # fast MA (hours)
+SLOW_MA = 42                    # slow MA (hours)
+SPREAD_NORM_WINDOW = 72         # z-score normalization window
+
+# Entry/exit thresholds (hysteresis)
+ENTRY_THRESHOLD = 0.6           # z-score to enter (strong signal)
+EXIT_THRESHOLD = 0.1            # z-score to exit (weak signal)
 
 # Position sizing
-POSITION_SIZE = 0.3             # base position size (fraction of capital per signal)
-VOL_SCALING = True              # scale position by inverse volatility
-VOL_LOOKBACK = 48               # hours for volatility calculation
-VOL_TARGET = 0.25               # annualized volatility target
-MAX_POSITION = 0.5              # max absolute position per asset
-
-# Multi-asset
-CORRELATION_FILTER = True       # reduce position when assets are highly correlated
-CORRELATION_LOOKBACK = 168      # hours
-CORRELATION_THRESHOLD = 0.8     # correlation threshold to reduce exposure
+POSITION_SIZE = 0.40            # fraction of capital per signal
+VOL_SCALING = True              # adjust size by volatility
+VOL_LOOKBACK = 24               # hours
+VOL_TARGET = 0.25               # annualized vol target
+MAX_POSITION = 0.8              # max absolute position
 
 
 # ---------------------------------------------------------------------------
@@ -36,75 +35,100 @@ CORRELATION_THRESHOLD = 0.8     # correlation threshold to reduce exposure
 
 def compute_signal(df: pd.DataFrame) -> pd.Series:
     """
-    Compute trading signal for a single asset.
-    Returns a Series of values in [-1, +1].
+    BTC perp signal with hysteresis.
+    +1 = long, -1 = short, 0 = flat.
     """
     c = df["close"]
 
-    # --- Continuous MA spread signal ---
-    fast_ma = c.rolling(FAST_MA, min_periods=1).mean()
-    slow_ma = c.rolling(SLOW_MA, min_periods=1).mean()
-
-    ma_spread = (fast_ma - slow_ma) / slow_ma
+    # --- MA spread z-score ---
+    fast_line = c.rolling(FAST_MA, min_periods=1).mean()
+    slow_line = c.rolling(SLOW_MA, min_periods=1).mean()
+    ma_spread = (fast_line - slow_line) / slow_line
     spread_std = ma_spread.rolling(SPREAD_NORM_WINDOW, min_periods=12).std().replace(0, np.nan)
-    signal = (ma_spread / spread_std).clip(-2, 2) / 2
+    zscore = (ma_spread / spread_std).fillna(0)
 
-    # --- Volatility-adjusted position sizing ---
+    # --- Hysteresis: enter strong, exit weak ---
+    position = pd.Series(0.0, index=df.index)
+    current_pos = 0.0
+
+    for i in range(len(df)):
+        z = zscore.iloc[i]
+
+        if current_pos == 0:
+            if z > ENTRY_THRESHOLD:
+                current_pos = 1.0
+            elif z < -ENTRY_THRESHOLD:
+                current_pos = -1.0
+        elif current_pos > 0:
+            # Exit long when z crosses below negative exit threshold
+            if z < -EXIT_THRESHOLD:
+                current_pos = 0.0
+            # Reverse to short on strong opposite signal
+            if z < -ENTRY_THRESHOLD:
+                current_pos = -1.0
+        elif current_pos < 0:
+            # Exit short when z crosses above positive exit threshold
+            if z > EXIT_THRESHOLD:
+                current_pos = 0.0
+            # Reverse to long on strong opposite signal
+            if z > ENTRY_THRESHOLD:
+                current_pos = 1.0
+
+        position.iloc[i] = current_pos
+
+    # --- Vol sizing at entry only ---
     if VOL_SCALING and f"volatility_{VOL_LOOKBACK}h" in df.columns:
         vol = df[f"volatility_{VOL_LOOKBACK}h"]
         ann_vol = vol * np.sqrt(8760)
         vol_scalar = VOL_TARGET / ann_vol.replace(0, np.nan)
-        vol_scalar = vol_scalar.clip(0.2, 3.0)
-        signal = signal * vol_scalar
+        vol_scalar = vol_scalar.clip(0.3, 2.0)
+        pos_changed = position != position.shift(1)
+        entry_vol = vol_scalar.copy()
+        entry_vol[~pos_changed] = np.nan
+        entry_vol = entry_vol.ffill().fillna(1.0)
+        signal = position * entry_vol
+    else:
+        signal = position
 
-    # Apply base position size
     signal = signal * POSITION_SIZE
-
-    # Clip to max position
     signal = signal.clip(-MAX_POSITION, MAX_POSITION)
 
     return signal
 
 
 def generate_signals(features: dict[str, pd.DataFrame]) -> pd.DataFrame:
-    """
-    Generate trading signals for all assets.
-
-    Args:
-        features: dict mapping asset name -> DataFrame of features
-
-    Returns:
-        DataFrame indexed by timestamp, with one column per asset.
-        Values in [-1.0, +1.0] representing desired position sizing.
-    """
+    """BTC only. ETH flat."""
     signals = {}
-    for asset, df in features.items():
-        signals[asset] = compute_signal(df)
+
+    if "BTC" in features:
+        signals["BTC"] = compute_signal(features["BTC"])
+
+    if "ETH" in features:
+        signals["ETH"] = pd.Series(0.0, index=features["ETH"].index)
 
     result = pd.DataFrame(signals)
 
-    # --- Drawdown circuit breaker: reduce exposure when recent returns are negative ---
-    for asset in features:
-        ret_48h = features[asset]["close"].pct_change(48)
-        # If asset dropped > 5% in last 48h, halve the signal
-        big_drop = ret_48h < -0.03
-        result.loc[big_drop, asset] = result.loc[big_drop, asset] * 0.5
+    # --- Circuit breaker ---
+    if "BTC" in features:
+        ret_96h = features["BTC"]["close"].pct_change(96)
+        big_drop = ret_96h < -0.05
+        result.loc[big_drop, "BTC"] = result.loc[big_drop, "BTC"] * 0.5
 
-    # --- Correlation filter ---
-    if CORRELATION_FILTER and len(features) > 1:
-        assets = list(features.keys())
-        returns = pd.DataFrame({a: features[a]["close"].pct_change() for a in assets})
-        rolling_corr = returns[assets[0]].rolling(CORRELATION_LOOKBACK).corr(returns[assets[1]])
-
-        high_corr = rolling_corr.abs() > CORRELATION_THRESHOLD
-        for asset in assets:
-            result.loc[high_corr, asset] = result.loc[high_corr, asset] * 0.5
+    # --- Volatility regime scaling ---
+    if "BTC" in features:
+        df = features["BTC"]
+        if "volatility_168h" in df.columns and "volatility_720h" in df.columns:
+            vol_7d = df["volatility_168h"]
+            vol_30d = df["volatility_720h"]
+            vol_ratio = vol_7d / vol_30d.replace(0, np.nan)
+            regime_scale = (1.0 / vol_ratio.clip(0.5, 2.0)).fillna(1.0)
+            result["BTC"] = result["BTC"] * regime_scale
 
     return result
 
 
 # ---------------------------------------------------------------------------
-# Main: evaluate and print results
+# Main
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":

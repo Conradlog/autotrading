@@ -38,9 +38,9 @@ CANDLE_INTERVAL_MS = 3600_000   # 1 hour in milliseconds
 # Default tradeable assets — agent cannot change this list
 ASSETS = ["BTC", "ETH"]
 
-INITIAL_CAPITAL = 100_000.0     # USD starting capital for backtest
-MAX_LEVERAGE = 3.0              # hard cap on leverage
-COMMISSION_BPS = 3.5            # round-trip commission in basis points (HyperLiquid taker)
+INITIAL_CAPITAL = 500.0         # USD starting capital (realistic for live)
+MAX_LEVERAGE = 3.0              # perpetual futures, 3x leverage
+COMMISSION_BPS = 3.5            # HyperLiquid perp taker fee
 SLIPPAGE_BPS = 2.0              # estimated slippage per trade
 FUNDING_RATE_INTERVAL_H = 8    # HyperLiquid funding rate interval
 
@@ -58,27 +58,37 @@ def _get_info_client():
     return Info(constants.MAINNET_API_URL, skip_ws=True)
 
 
-def download_candles(asset: str, lookback_days: int = LOOKBACK_DAYS) -> pd.DataFrame:
+INTERVAL_TO_MS = {
+    "1m": 60_000, "3m": 180_000, "5m": 300_000, "15m": 900_000,
+    "30m": 1_800_000, "1h": 3_600_000, "2h": 7_200_000, "4h": 14_400_000,
+    "8h": 28_800_000, "12h": 43_200_000, "1d": 86_400_000,
+    "3d": 259_200_000, "1w": 604_800_000,
+}
+
+
+def download_candles(asset: str, lookback_days: int = LOOKBACK_DAYS,
+                     interval: str = CANDLE_INTERVAL) -> pd.DataFrame:
     """Download OHLCV candles from HyperLiquid API with pagination."""
     info = _get_info_client()
 
+    interval_ms = INTERVAL_TO_MS.get(interval, CANDLE_INTERVAL_MS)
     end_time = int(time.time() * 1000)
     start_time = end_time - (lookback_days * 24 * 3600 * 1000)
 
     all_candles = []
     cursor = start_time
 
-    print(f"  [{asset}] Downloading {CANDLE_INTERVAL} candles ({lookback_days} days)...")
+    print(f"  [{asset}] Downloading {interval} candles ({lookback_days} days)...")
 
     while cursor < end_time:
-        chunk_end = min(cursor + 500 * CANDLE_INTERVAL_MS, end_time)
+        chunk_end = min(cursor + 500 * interval_ms, end_time)
         try:
-            candles = info.candles_snapshot(asset, CANDLE_INTERVAL, cursor, chunk_end)
+            candles = info.candles_snapshot(asset, interval, cursor, chunk_end)
         except Exception as e:
             print(f"  [{asset}] API error at {cursor}: {e}, retrying...")
             time.sleep(2)
             try:
-                candles = info.candles_snapshot(asset, CANDLE_INTERVAL, cursor, chunk_end)
+                candles = info.candles_snapshot(asset, interval, cursor, chunk_end)
             except Exception as e2:
                 print(f"  [{asset}] Failed after retry: {e2}")
                 break
@@ -89,7 +99,7 @@ def download_candles(asset: str, lookback_days: int = LOOKBACK_DAYS) -> pd.DataF
 
         all_candles.extend(candles)
         last_t = max(int(c["t"]) for c in candles)
-        cursor = last_t + CANDLE_INTERVAL_MS
+        cursor = last_t + interval_ms
 
         # Rate limit
         time.sleep(0.1)
@@ -161,31 +171,41 @@ def download_funding(asset: str, lookback_days: int = LOOKBACK_DAYS) -> pd.DataF
     return df
 
 
-def download_all_data(assets: list[str] = None, lookback_days: int = LOOKBACK_DAYS):
-    """Download and cache all market data for given assets."""
+def download_all_data(assets: list[str] = None, lookback_days: int = LOOKBACK_DAYS,
+                      max_age_hours: float = 2.0, interval: str = CANDLE_INTERVAL):
+    """Download and cache all market data for given assets.
+
+    Args:
+        max_age_hours: Skip download if cached data is newer than this (default 2h).
+                       Set to 0 to force refresh.
+        interval: Candle interval (e.g. "1h", "5m", "15m").
+    """
     if assets is None:
         assets = ASSETS
     os.makedirs(DATA_DIR, exist_ok=True)
 
+    # Use interval suffix for non-default intervals to avoid overwriting backtest data
+    suffix = f"_{interval}" if interval != CANDLE_INTERVAL else ""
+
     for asset in assets:
-        candle_path = os.path.join(DATA_DIR, f"{asset}_candles.parquet")
+        candle_path = os.path.join(DATA_DIR, f"{asset}_candles{suffix}.parquet")
         funding_path = os.path.join(DATA_DIR, f"{asset}_funding.parquet")
 
         # Check if data exists and is recent enough
         need_download = True
-        if os.path.exists(candle_path):
+        if max_age_hours > 0 and os.path.exists(candle_path):
             existing = pd.read_parquet(candle_path)
             if len(existing) > 0:
                 last_ts = existing["timestamp"].max()
                 hours_old = (pd.Timestamp.now(tz="UTC") - last_ts).total_seconds() / 3600
-                if hours_old < 2:
+                if hours_old < max_age_hours:
                     print(f"  [{asset}] Candles already up-to-date (last: {last_ts})")
                     need_download = False
                 else:
                     print(f"  [{asset}] Candles are {hours_old:.0f}h old, refreshing...")
 
         if need_download:
-            candles_df = download_candles(asset, lookback_days)
+            candles_df = download_candles(asset, lookback_days, interval=interval)
             if len(candles_df) > 0:
                 candles_df.to_parquet(candle_path, index=False)
 
@@ -194,14 +214,15 @@ def download_all_data(assets: list[str] = None, lookback_days: int = LOOKBACK_DA
                 funding_df.to_parquet(funding_path, index=False)
 
 
-def load_market_data(asset: str) -> pd.DataFrame:
+def load_market_data(asset: str, interval: str = CANDLE_INTERVAL) -> pd.DataFrame:
     """Load cached market data and merge candles with funding rates."""
-    candle_path = os.path.join(DATA_DIR, f"{asset}_candles.parquet")
+    suffix = f"_{interval}" if interval != CANDLE_INTERVAL else ""
+    candle_path = os.path.join(DATA_DIR, f"{asset}_candles{suffix}.parquet")
     funding_path = os.path.join(DATA_DIR, f"{asset}_funding.parquet")
 
     if not os.path.exists(candle_path):
         raise FileNotFoundError(
-            f"No data for {asset}. Run: uv run prepare.py"
+            f"No data for {asset} (interval={interval}). Run: uv run prepare.py"
         )
 
     df = pd.read_parquet(candle_path)
@@ -451,8 +472,8 @@ class BacktestEngine:
 
             current_equity += pnl
 
-            # Deduct funding costs
-            if funding_df is not None:
+            # Deduct funding costs (every FUNDING_RATE_INTERVAL_H bars, not every bar)
+            if funding_df is not None and i % FUNDING_RATE_INTERVAL_H == 0:
                 for asset in assets:
                     if position_units[asset] != 0 and ts in funding_df.index:
                         fr = funding_df.loc[ts, asset] if asset in funding_df.columns else 0.0
