@@ -35,7 +35,7 @@ from prepare import (
 # ---------------------------------------------------------------------------
 
 LIVE_MODE = False               # PAPER by default — only change explicitly
-CHECK_INTERVAL = 300            # seconds between re-evaluations (5 minutes)
+CHECK_INTERVAL = 3600            # seconds between re-evaluations (5 minutes)
 LIVE_CANDLE_INTERVAL = "1h"     # candle resolution — must match backtest for consistent signals
 MAX_DAILY_LOSS_PCT = 5.0        # kill switch: max daily loss as % of capital
 MAX_POSITION_USD = 50_000       # max notional per position
@@ -266,7 +266,7 @@ def run_strategy_live(trader, once: bool = False, interval: int = CHECK_INTERVAL
         try:
             # Only trade BTC — download 1h candles + funding
             from prepare import download_candles, download_funding, DATA_DIR
-            live_lookback = min(LOOKBACK_DAYS, 90)
+            live_lookback = LOOKBACK_DAYS  # use full 365 days for better feature warmup
             trade_assets = ["BTC"]  # BTC only
 
             print(f"Downloading BTC data (1h candles, {live_lookback} days)...")
