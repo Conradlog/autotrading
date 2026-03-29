@@ -472,8 +472,8 @@ class BacktestEngine:
 
             current_equity += pnl
 
-            # Deduct funding costs
-            if funding_df is not None:
+            # Deduct funding costs (every FUNDING_RATE_INTERVAL_H bars, not every bar)
+            if funding_df is not None and i % FUNDING_RATE_INTERVAL_H == 0:
                 for asset in assets:
                     if position_units[asset] != 0 and ts in funding_df.index:
                         fr = funding_df.loc[ts, asset] if asset in funding_df.columns else 0.0

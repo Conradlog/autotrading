@@ -60,13 +60,17 @@ def compute_signal(df: pd.DataFrame) -> pd.Series:
             elif z < -ENTRY_THRESHOLD:
                 current_pos = -1.0
         elif current_pos > 0:
-            if z < EXIT_THRESHOLD:
+            # Exit long when z crosses below negative exit threshold
+            if z < -EXIT_THRESHOLD:
                 current_pos = 0.0
+            # Reverse to short on strong opposite signal
             if z < -ENTRY_THRESHOLD:
                 current_pos = -1.0
         elif current_pos < 0:
-            if z > -EXIT_THRESHOLD:
+            # Exit short when z crosses above positive exit threshold
+            if z > EXIT_THRESHOLD:
                 current_pos = 0.0
+            # Reverse to long on strong opposite signal
             if z > ENTRY_THRESHOLD:
                 current_pos = 1.0
 
