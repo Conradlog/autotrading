@@ -60,19 +60,15 @@ def compute_signal(df: pd.DataFrame) -> pd.Series:
             elif z < -ENTRY_THRESHOLD:
                 current_pos = -1.0
         elif current_pos > 0:
-            # Exit long when z crosses below negative exit threshold
-            if z < -EXIT_THRESHOLD:
-                current_pos = 0.0
-            # Reverse to short on strong opposite signal
             if z < -ENTRY_THRESHOLD:
-                current_pos = -1.0
+                current_pos = -1.0       # reverse to short
+            elif z < -EXIT_THRESHOLD:
+                current_pos = 0.0        # exit long
         elif current_pos < 0:
-            # Exit short when z crosses above positive exit threshold
-            if z > EXIT_THRESHOLD:
-                current_pos = 0.0
-            # Reverse to long on strong opposite signal
             if z > ENTRY_THRESHOLD:
-                current_pos = 1.0
+                current_pos = 1.0        # reverse to long
+            elif z > EXIT_THRESHOLD:
+                current_pos = 0.0        # exit short
 
         position.iloc[i] = current_pos
 
@@ -123,6 +119,9 @@ def generate_signals(features: dict[str, pd.DataFrame]) -> pd.DataFrame:
             vol_ratio = vol_7d / vol_30d.replace(0, np.nan)
             regime_scale = (1.0 / vol_ratio.clip(0.5, 2.0)).fillna(1.0)
             result["BTC"] = result["BTC"] * regime_scale
+
+    # Final clip to enforce [-1, +1] contract after all scaling
+    result = result.clip(-1.0, 1.0)
 
     return result
 
