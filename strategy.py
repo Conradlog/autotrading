@@ -12,8 +12,9 @@ import pandas as pd
 # Tunable Parameters (agent modifies these)
 # ---------------------------------------------------------------------------
 
-# MA crossover
+# Triple MA
 FAST_MA = 12                    # fast moving average period (hours)
+MID_MA = 28                     # medium moving average period (hours)
 SLOW_MA = 42                    # slow moving average period (hours)
 SPREAD_NORM_WINDOW = 72         # window for normalizing MA spread
 
@@ -41,11 +42,16 @@ def compute_signal(df: pd.DataFrame) -> pd.Series:
     """
     c = df["close"]
 
-    # --- Continuous MA spread signal ---
-    fast_ma = c.rolling(FAST_MA, min_periods=1).mean()
-    slow_ma = c.rolling(SLOW_MA, min_periods=1).mean()
+    # --- Triple MA spread signal ---
+    fast_line = c.rolling(FAST_MA, min_periods=1).mean()
+    mid_line = c.rolling(MID_MA, min_periods=1).mean()
+    slow_line = c.rolling(SLOW_MA, min_periods=1).mean()
 
-    ma_spread = (fast_ma - slow_ma) / slow_ma
+    # Average of fast-mid and mid-slow spreads
+    spread1 = (fast_line - mid_line) / mid_line
+    spread2 = (mid_line - slow_line) / slow_line
+    ma_spread = (spread1 + spread2) / 2
+
     spread_std = ma_spread.rolling(SPREAD_NORM_WINDOW, min_periods=12).std().replace(0, np.nan)
     signal = (ma_spread / spread_std).clip(-2, 2) / 2
 
