@@ -258,16 +258,47 @@ def run_strategy_live(trader, once: bool = False, interval: int = CHECK_INTERVAL
         print(f"{'='*60}")
 
         try:
-            # Refresh 1h candles — use suffix to avoid overwriting backtest data
+            # Refresh 1h candles into separate live files
             print(f"Downloading latest data (1h candles)...")
-            download_all_data(lookback_days=min(LOOKBACK_DAYS, 90),
-                              max_age_hours=0, interval="1h_live")
+            live_lookback = min(LOOKBACK_DAYS, 90)
+            for asset in ASSETS:
+                from prepare import download_candles, download_funding, DATA_DIR, CANDLE_INTERVAL
+                import os
+                candle_path = os.path.join(DATA_DIR, f"{asset}_candles_live.parquet")
+                funding_path = os.path.join(DATA_DIR, f"{asset}_funding.parquet")
+                candles_df = download_candles(asset, live_lookback, interval="1h")
+                if len(candles_df) > 0:
+                    candles_df.to_parquet(candle_path, index=False)
+                # Funding already shared, skip if recent
+                if not os.path.exists(funding_path):
+                    funding_df = download_funding(asset, live_lookback)
+                    if len(funding_df) > 0:
+                        funding_df.to_parquet(funding_path, index=False)
 
-            # Load features
+            # Load features from live files
             features = {}
             prices = {}
             for asset in ASSETS:
-                df = load_market_data(asset, interval="1h_live")
+                import os
+                from prepare import DATA_DIR
+                candle_path = os.path.join(DATA_DIR, f"{asset}_candles_live.parquet")
+                funding_path = os.path.join(DATA_DIR, f"{asset}_funding.parquet")
+                df = pd.read_parquet(candle_path)
+                df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
+                if os.path.exists(funding_path):
+                    funding = pd.read_parquet(funding_path)
+                    funding["timestamp"] = pd.to_datetime(funding["timestamp"], utc=True)
+                    df = pd.merge_asof(df.sort_values("timestamp"),
+                                       funding[["timestamp", "funding_rate", "premium"]].sort_values("timestamp"),
+                                       on="timestamp", direction="backward")
+                    df["funding_rate"] = df["funding_rate"].fillna(0.0)
+                    df["premium"] = df["premium"].fillna(0.0)
+                else:
+                    df["funding_rate"] = 0.0
+                    df["premium"] = 0.0
+                df = df.reset_index(drop=True)
+                df_feat = compute_base_features(df)
+                df_feat = df_feat.set_index("timestamp")
                 df_feat = compute_base_features(df)
                 df_feat = df_feat.set_index("timestamp")
                 features[asset] = df_feat
