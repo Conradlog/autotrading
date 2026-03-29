@@ -258,16 +258,16 @@ def run_strategy_live(trader, once: bool = False, interval: int = CHECK_INTERVAL
         print(f"{'='*60}")
 
         try:
-            # Refresh 1h candles (same as backtest timeframe)
+            # Refresh 1h candles — use suffix to avoid overwriting backtest data
             print(f"Downloading latest data (1h candles)...")
             download_all_data(lookback_days=min(LOOKBACK_DAYS, 90),
-                              max_age_hours=0, interval="1h")
+                              max_age_hours=0, interval="1h_live")
 
             # Load features
             features = {}
             prices = {}
             for asset in ASSETS:
-                df = load_market_data(asset, interval="1h")
+                df = load_market_data(asset, interval="1h_live")
                 df_feat = compute_base_features(df)
                 df_feat = df_feat.set_index("timestamp")
                 features[asset] = df_feat
