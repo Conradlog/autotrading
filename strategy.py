@@ -35,7 +35,7 @@ MAX_POSITION = 0.8              # max absolute position
 
 def compute_signal(df: pd.DataFrame) -> pd.Series:
     """
-    BTC perp signal with hysteresis.
+    BTC perp signal with hysteresis + MACD confirmation.
     +1 = long, -1 = short, 0 = flat.
     """
     c = df["close"]
@@ -47,25 +47,30 @@ def compute_signal(df: pd.DataFrame) -> pd.Series:
     spread_std = ma_spread.rolling(SPREAD_NORM_WINDOW, min_periods=12).std().replace(0, np.nan)
     zscore = (ma_spread / spread_std).fillna(0)
 
+    # --- MACD confirmation ---
+    macd_hist = df["macd_histogram"] if "macd_histogram" in df.columns else pd.Series(0.0, index=df.index)
+
     # --- Hysteresis: enter strong, exit weak ---
     position = pd.Series(0.0, index=df.index)
     current_pos = 0.0
 
     for i in range(len(df)):
         z = zscore.iloc[i]
+        mh = macd_hist.iloc[i]
 
         if current_pos == 0:
-            if z > ENTRY_THRESHOLD:
+            # Only enter if MACD confirms direction
+            if z > ENTRY_THRESHOLD and mh > 0:
                 current_pos = 1.0
-            elif z < -ENTRY_THRESHOLD:
+            elif z < -ENTRY_THRESHOLD and mh < 0:
                 current_pos = -1.0
         elif current_pos > 0:
-            if z < -ENTRY_THRESHOLD:
+            if z < -ENTRY_THRESHOLD and mh < 0:
                 current_pos = -1.0       # reverse to short
             elif z < -EXIT_THRESHOLD:
                 current_pos = 0.0        # exit long
         elif current_pos < 0:
-            if z > ENTRY_THRESHOLD:
+            if z > ENTRY_THRESHOLD and mh > 0:
                 current_pos = 1.0        # reverse to long
             elif z > EXIT_THRESHOLD:
                 current_pos = 0.0        # exit short
