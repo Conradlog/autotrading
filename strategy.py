@@ -67,8 +67,8 @@ def compute_signal(df: pd.DataFrame) -> pd.Series:
     signal = signal * POSITION_SIZE
 
     # Dead zone with persistence: signal must be strong for 3h to count
-    raw_strong = signal.abs() > 0.03
-    persistent = raw_strong.rolling(2, min_periods=2).min().fillna(0).astype(bool)
+    raw_strong = signal.abs() > 0.05
+    persistent = raw_strong.rolling(3, min_periods=3).min().fillna(0).astype(bool)
     signal = signal.where(persistent, 0.0)
 
     # Clip to max position
