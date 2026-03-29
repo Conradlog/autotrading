@@ -81,9 +81,12 @@ def compute_signal(df: pd.DataFrame) -> pd.Series:
 
         position.iloc[i] = current_pos
 
-    # --- Vol sizing at entry only ---
-    if VOL_SCALING and f"volatility_{VOL_LOOKBACK}h" in df.columns:
-        vol = df[f"volatility_{VOL_LOOKBACK}h"]
+    # --- Vol sizing at entry only (use GK vol if available) ---
+    gk_col = f"gk_volatility_{VOL_LOOKBACK}h"
+    std_col = f"volatility_{VOL_LOOKBACK}h"
+    vol_col = gk_col if gk_col in df.columns else std_col
+    if VOL_SCALING and vol_col in df.columns:
+        vol = df[vol_col]
         ann_vol = vol * np.sqrt(8760)
         vol_scalar = VOL_TARGET / ann_vol.replace(0, np.nan)
         vol_scalar = vol_scalar.clip(0.3, 2.0)
