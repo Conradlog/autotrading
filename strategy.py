@@ -35,7 +35,7 @@ TAKE_PROFIT_ATR_MULT = 4.0      # take profit as multiple of ATR
 MAX_POSITION = 0.8              # max absolute position per asset
 
 # Funding rate signal
-USE_FUNDING_SIGNAL = True       # use funding rate as contrarian signal
+USE_FUNDING_SIGNAL = False      # disable funding signal
 FUNDING_THRESHOLD = 2.0         # z-score threshold for funding-based signal
 
 # Multi-asset
