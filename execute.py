@@ -36,6 +36,7 @@ from prepare import (
 
 LIVE_MODE = False               # PAPER by default — only change explicitly
 CHECK_INTERVAL = 300            # seconds between re-evaluations (5 minutes)
+LIVE_CANDLE_INTERVAL = "5m"     # candle resolution for live/paper trading
 MAX_DAILY_LOSS_PCT = 5.0        # kill switch: max daily loss as % of capital
 MAX_POSITION_USD = 50_000       # max notional per position
 DRY_RUN = True                  # if True, log trades but don't execute
@@ -257,15 +258,16 @@ def run_strategy_live(trader, once: bool = False, interval: int = CHECK_INTERVAL
         print(f"{'='*60}")
 
         try:
-            # Refresh data
-            print("Downloading latest data...")
-            download_all_data(lookback_days=min(LOOKBACK_DAYS, 30), max_age_hours=0)
+            # Refresh data (5m candles for live trading)
+            print(f"Downloading latest data ({LIVE_CANDLE_INTERVAL} candles)...")
+            download_all_data(lookback_days=min(LOOKBACK_DAYS, 30),
+                              max_age_hours=0, interval=LIVE_CANDLE_INTERVAL)
 
             # Load features
             features = {}
             prices = {}
             for asset in ASSETS:
-                df = load_market_data(asset)
+                df = load_market_data(asset, interval=LIVE_CANDLE_INTERVAL)
                 df_feat = compute_base_features(df)
                 df_feat = df_feat.set_index("timestamp")
                 features[asset] = df_feat
