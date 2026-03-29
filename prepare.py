@@ -616,12 +616,13 @@ def evaluate_strategy(strategy_module, split: str = "val") -> dict:
     runs backtest on the appropriate split, returns metrics dict.
 
     The composite score (higher is better):
-        score = sharpe_ratio * (1 - max_drawdown) * sign(total_return)
+        If return > 0: score = sharpe_ratio * (1 - max_drawdown)
+        If return <= 0: score = -abs(sharpe_ratio) * (1 + max_drawdown)
 
     This penalizes:
     - Low risk-adjusted returns (low Sharpe)
     - Large drawdowns (high max_drawdown)
-    - Negative returns (score goes negative)
+    - Negative returns (score is always negative)
 
     Minimum trade count: strategies with < 10 trades get score = 0 (insufficient signal).
     """
@@ -693,9 +694,12 @@ def evaluate_strategy(strategy_module, split: str = "val") -> dict:
     # Composite score
     if result.num_trades < 10:
         composite_score = 0.0  # insufficient trades
+    elif result.total_return <= 0:
+        # Negative return strategies always get negative score
+        composite_score = -abs(result.sharpe_ratio) * (1.0 + result.max_drawdown)
     else:
-        sign_return = 1.0 if result.total_return > 0 else (-1.0 if result.total_return < 0 else 0.0)
-        composite_score = result.sharpe_ratio * (1.0 - result.max_drawdown) * sign_return
+        # Positive return: reward sharpe, penalize drawdown
+        composite_score = result.sharpe_ratio * (1.0 - result.max_drawdown)
 
     return {
         "composite_score": composite_score,
