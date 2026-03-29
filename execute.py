@@ -261,7 +261,8 @@ def run_strategy_live(trader, once: bool = False, interval: int = CHECK_INTERVAL
             # Refresh data: download 5m candles for freshness, resample to 1h
             # so the strategy sees the same timeframe as backtesting
             print(f"Downloading latest data ({LIVE_CANDLE_INTERVAL} candles, resampled to 1h)...")
-            download_all_data(lookback_days=min(LOOKBACK_DAYS, 30),
+            # Need at least 60 days for volatility_720h and regime scaling
+            download_all_data(lookback_days=min(LOOKBACK_DAYS, 90),
                               max_age_hours=0, interval=LIVE_CANDLE_INTERVAL)
 
             # Load features
