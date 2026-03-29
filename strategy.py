@@ -19,7 +19,7 @@ SPREAD_NORM_WINDOW = 72         # z-score normalization window
 
 # Entry/exit thresholds (hysteresis)
 ENTRY_THRESHOLD = 0.6           # z-score to enter (strong signal)
-EXIT_THRESHOLD = 0.1            # z-score to exit (weak signal)
+EXIT_THRESHOLD = 0.08           # z-score to exit (weak signal)
 
 # Position sizing
 POSITION_SIZE = 0.50            # fraction of capital per signal
