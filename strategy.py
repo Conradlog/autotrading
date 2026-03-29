@@ -61,7 +61,7 @@ def compute_signal(df: pd.DataFrame) -> pd.Series:
 
     # Normalize spread by recent volatility for a continuous [-1, 1] signal
     ma_spread = (fast_ma - slow_ma) / slow_ma
-    spread_std = ma_spread.rolling(48, min_periods=12).std().replace(0, np.nan)
+    spread_std = ma_spread.rolling(72, min_periods=12).std().replace(0, np.nan)
     trend_signal = (ma_spread / spread_std).clip(-2, 2) / 2
 
     # --- Long-term trend filter (optional) ---
