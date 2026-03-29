@@ -36,7 +36,7 @@ from prepare import (
 
 LIVE_MODE = False               # PAPER by default — only change explicitly
 CHECK_INTERVAL = 300            # seconds between re-evaluations (5 minutes)
-LIVE_CANDLE_INTERVAL = "5m"     # candle resolution for live/paper trading
+LIVE_CANDLE_INTERVAL = "1h"     # candle resolution — must match backtest for consistent signals
 MAX_DAILY_LOSS_PCT = 5.0        # kill switch: max daily loss as % of capital
 MAX_POSITION_USD = 50_000       # max notional per position
 DRY_RUN = True                  # if True, log trades but don't execute
@@ -258,39 +258,20 @@ def run_strategy_live(trader, once: bool = False, interval: int = CHECK_INTERVAL
         print(f"{'='*60}")
 
         try:
-            # Refresh data: download 5m candles for freshness, resample to 1h
-            # so the strategy sees the same timeframe as backtesting
-            print(f"Downloading latest data ({LIVE_CANDLE_INTERVAL} candles, resampled to 1h)...")
-            # Need at least 60 days for volatility_720h and regime scaling
+            # Refresh 1h candles (same as backtest timeframe)
+            print(f"Downloading latest data (1h candles)...")
             download_all_data(lookback_days=min(LOOKBACK_DAYS, 90),
-                              max_age_hours=0, interval=LIVE_CANDLE_INTERVAL)
+                              max_age_hours=0, interval="1h")
 
             # Load features
             features = {}
             prices = {}
             for asset in ASSETS:
-                df_5m = load_market_data(asset, interval=LIVE_CANDLE_INTERVAL)
-
-                # Resample 5m -> 1h (matching backtest timeframe)
-                df_5m = df_5m.set_index("timestamp")
-                df_1h = df_5m.resample("1h").agg({
-                    "open": "first",
-                    "high": "max",
-                    "low": "min",
-                    "close": "last",
-                    "volume": "sum",
-                    "num_trades": "sum",
-                    "funding_rate": "last",
-                    "premium": "last",
-                }).dropna(subset=["close"]).reset_index()
-
-                # Latest live price (from most recent 5m candle)
-                live_price = df_5m["close"].iloc[-1]
-
-                df_feat = compute_base_features(df_1h)
+                df = load_market_data(asset, interval="1h")
+                df_feat = compute_base_features(df)
                 df_feat = df_feat.set_index("timestamp")
                 features[asset] = df_feat
-                prices[asset] = live_price
+                prices[asset] = df_feat["close"].iloc[-1]
 
             # Generate signals
             signals_df = strategy.generate_signals(features)
