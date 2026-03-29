@@ -35,7 +35,7 @@ from prepare import (
 # ---------------------------------------------------------------------------
 
 LIVE_MODE = False               # PAPER by default — only change explicitly
-CHECK_INTERVAL = 3600           # seconds between re-evaluations (1 hour)
+CHECK_INTERVAL = 300            # seconds between re-evaluations (5 minutes)
 MAX_DAILY_LOSS_PCT = 5.0        # kill switch: max daily loss as % of capital
 MAX_POSITION_USD = 50_000       # max notional per position
 DRY_RUN = True                  # if True, log trades but don't execute
