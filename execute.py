@@ -168,6 +168,11 @@ class LiveTrader:
         print(f"  Account: {self.wallet.address}")
         print(f"  Margin: ${float(user_state.get('marginSummary', {}).get('accountValue', 0)):.2f}")
 
+    def get_equity(self, prices: dict[str, float] = None) -> float:
+        """Get account equity from HyperLiquid."""
+        user_state = self.info.user_state(self.wallet.address)
+        return float(user_state.get("marginSummary", {}).get("accountValue", INITIAL_CAPITAL))
+
     def get_positions(self) -> dict[str, float]:
         """Get current positions as {asset: units}."""
         user_state = self.info.user_state(self.wallet.address)
@@ -248,6 +253,7 @@ def run_strategy_live(trader, once: bool = False, interval: int = CHECK_INTERVAL
     import strategy
 
     daily_start_equity = None
+    last_reset_date = None
     iteration = 0
 
     while True:
@@ -268,7 +274,7 @@ def run_strategy_live(trader, once: bool = False, interval: int = CHECK_INTERVAL
             prices = {}
             for asset in trade_assets:
                 candle_path = os.path.join(DATA_DIR, f"{asset}_candles_live.parquet")
-                funding_path = os.path.join(DATA_DIR, f"{asset}_funding.parquet")
+                funding_path = os.path.join(DATA_DIR, f"{asset}_funding_live.parquet")
 
                 candles_df = download_candles(asset, live_lookback, interval="1h")
                 if len(candles_df) > 0:
@@ -309,9 +315,11 @@ def run_strategy_live(trader, once: bool = False, interval: int = CHECK_INTERVAL
                 print(f"  {asset}: {sig:+.4f} ({direction})")
 
             # Check daily loss kill switch
-            equity = trader.get_equity(prices) if isinstance(trader, PaperTrader) else INITIAL_CAPITAL
-            if daily_start_equity is None:
+            equity = trader.get_equity(prices)
+            current_date = datetime.now(timezone.utc).date()
+            if daily_start_equity is None or current_date != last_reset_date:
                 daily_start_equity = equity
+                last_reset_date = current_date
 
             daily_pnl_pct = (equity - daily_start_equity) / daily_start_equity * 100
             print(f"\nEquity: ${equity:,.2f} | Daily PnL: {daily_pnl_pct:+.2f}%")

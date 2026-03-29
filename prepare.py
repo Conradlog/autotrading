@@ -36,7 +36,7 @@ CANDLE_INTERVAL = "1h"          # base candle resolution
 CANDLE_INTERVAL_MS = 3600_000   # 1 hour in milliseconds
 
 # Default tradeable assets — agent cannot change this list
-ASSETS = ["BTC", "ETH"]
+ASSETS = ["BTC"]
 
 INITIAL_CAPITAL = 500.0         # USD starting capital (realistic for live)
 MAX_LEVERAGE = 3.0              # perpetual futures, 3x leverage
@@ -472,8 +472,8 @@ class BacktestEngine:
 
             current_equity += pnl
 
-            # Deduct funding costs (every FUNDING_RATE_INTERVAL_H bars, not every bar)
-            if funding_df is not None and i % FUNDING_RATE_INTERVAL_H == 0:
+            # Deduct funding costs at real UTC funding hours (0, 8, 16)
+            if funding_df is not None and hasattr(ts, 'hour') and ts.hour % FUNDING_RATE_INTERVAL_H == 0:
                 for asset in assets:
                     if position_units[asset] != 0 and ts in funding_df.index:
                         fr = funding_df.loc[ts, asset] if asset in funding_df.columns else 0.0
@@ -506,7 +506,10 @@ class BacktestEngine:
                     trade_notional = abs(delta_units) * trade_price
                     commission = trade_notional * self.commission_rate
 
+                    # Deduct commission AND slippage cost
+                    slippage_cost = abs(delta_units) * abs(trade_price - price)
                     current_equity -= commission
+                    current_equity -= slippage_cost
 
                     trades_log.append({
                         "timestamp": ts,
@@ -541,10 +544,11 @@ class BacktestEngine:
         else:
             sharpe_ratio = 0.0
 
-        # Sortino (downside deviation)
-        downside = hourly_returns[hourly_returns < 0]
-        if len(downside) > 1 and downside.std() > 0:
-            sortino_ratio = (hourly_returns.mean() / downside.std()) * np.sqrt(hours_per_year)
+        # Sortino (proper semi-deviation against target=0)
+        downside_returns = np.minimum(hourly_returns, 0.0)
+        downside_dev = np.sqrt(np.mean(downside_returns ** 2))
+        if downside_dev > 0:
+            sortino_ratio = (hourly_returns.mean() / downside_dev) * np.sqrt(hours_per_year)
         else:
             sortino_ratio = 0.0
 
