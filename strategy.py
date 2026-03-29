@@ -122,9 +122,9 @@ def generate_signals(features: dict[str, pd.DataFrame]) -> pd.DataFrame:
     # --- Volatility regime scaling ---
     if "BTC" in features:
         df = features["BTC"]
-        if "volatility_168h" in df.columns and "volatility_720h" in df.columns:
-            vol_7d = df["volatility_168h"]
-            vol_30d = df["volatility_720h"]
+        if "gk_volatility_24h" in df.columns and "gk_volatility_168h" in df.columns:
+            vol_7d = df["gk_volatility_24h"]
+            vol_30d = df["gk_volatility_168h"]
             vol_ratio = vol_7d / vol_30d.replace(0, np.nan)
             regime_scale = (1.0 / vol_ratio.clip(0.5, 2.0)).fillna(1.0)
             result["BTC"] = result["BTC"] * regime_scale
