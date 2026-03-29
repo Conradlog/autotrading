@@ -13,8 +13,8 @@ import pandas as pd
 # ---------------------------------------------------------------------------
 
 # Trend following
-FAST_MA = 20                    # fast moving average period (hours)
-SLOW_MA = 50                    # slow moving average period (hours)
+FAST_MA = 12                    # fast moving average period (hours)
+SLOW_MA = 48                    # slow moving average period (hours)
 TREND_FILTER_PERIOD = 200       # only trade in direction of long-term trend
 USE_TREND_FILTER = False        # disable trend filter
 
