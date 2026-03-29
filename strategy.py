@@ -19,7 +19,7 @@ SPREAD_NORM_WINDOW = 72         # z-score normalization window
 
 # Entry/exit thresholds (hysteresis)
 ENTRY_THRESHOLD = 0.6           # z-score to enter (strong signal)
-EXIT_THRESHOLD = 0.1            # z-score to exit (weak signal)
+EXIT_THRESHOLD = 0.08           # z-score to exit (weak signal)
 
 # Position sizing
 POSITION_SIZE = 0.50            # fraction of capital per signal
@@ -92,6 +92,19 @@ def compute_signal(df: pd.DataFrame) -> pd.Series:
         signal = position * entry_vol
     else:
         signal = position
+
+    # --- Asymmetric sizing: shorts slightly smaller (crash risk) ---
+    short_mask = signal < 0
+    signal[short_mask] = signal[short_mask] * 0.7
+
+    # --- RSI position dampener: reduce when overbought/oversold ---
+    if "rsi_14" in df.columns:
+        rsi = df["rsi_14"].fillna(50)
+        rsi_scale = pd.Series(1.0, index=df.index)
+        # Dampen longs when RSI > 70, shorts when RSI < 30
+        rsi_scale = rsi_scale.where(~((signal > 0) & (rsi > 70)), 0.2)
+        rsi_scale = rsi_scale.where(~((signal < 0) & (rsi < 30)), 0.2)
+        signal = signal * rsi_scale
 
     signal = signal * POSITION_SIZE
     signal = signal.clip(-MAX_POSITION, MAX_POSITION)
