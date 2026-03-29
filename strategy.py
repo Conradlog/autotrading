@@ -88,8 +88,8 @@ def generate_signals(features: dict[str, pd.DataFrame]) -> pd.DataFrame:
 
     # --- Drawdown circuit breaker ---
     for asset in features:
-        ret_48h = features[asset]["close"].pct_change(48)
-        big_drop = ret_48h < -0.03
+        ret_72h = features[asset]["close"].pct_change(72)
+        big_drop = ret_72h < -0.04
         result.loc[big_drop, asset] = result.loc[big_drop, asset] * 0.5
 
     # --- Volatility regime scaling ---
