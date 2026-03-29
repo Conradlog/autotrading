@@ -73,23 +73,7 @@ def compute_signal(df: pd.DataFrame) -> pd.Series:
 
     signal = trend_signal
 
-    # --- RSI filter: reduce position at extremes ---
-    if f"rsi_{RSI_PERIOD}" in df.columns:
-        rsi = df[f"rsi_{RSI_PERIOD}"]
-    else:
-        delta = c.diff()
-        gain = delta.clip(lower=0)
-        loss = (-delta).clip(lower=0)
-        avg_gain = gain.ewm(alpha=1 / RSI_PERIOD, min_periods=RSI_PERIOD).mean()
-        avg_loss = loss.ewm(alpha=1 / RSI_PERIOD, min_periods=RSI_PERIOD).mean()
-        rs = avg_gain / avg_loss.replace(0, np.nan)
-        rsi = 100 - (100 / (1 + rs))
-
-    # Dampen signal when RSI is extreme (contrarian dampening)
-    rsi_dampener = pd.Series(1.0, index=df.index)
-    rsi_dampener[rsi > RSI_OVERBOUGHT] = 0.3   # reduce long when overbought
-    rsi_dampener[rsi < RSI_OVERSOLD] = 0.3      # reduce short when oversold
-    signal = signal * rsi_dampener
+    # RSI dampener disabled for simplicity — MA crossover + vol scaling only
 
     # --- Funding rate contrarian signal ---
     if USE_FUNDING_SIGNAL and "funding_zscore" in df.columns:
