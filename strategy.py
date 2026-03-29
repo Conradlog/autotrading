@@ -66,8 +66,10 @@ def compute_signal(df: pd.DataFrame) -> pd.Series:
     # Apply base position size
     signal = signal * POSITION_SIZE
 
-    # Dead zone: zero out very weak signals to avoid noise trades
-    signal = signal.where(signal.abs() > 0.06, 0.0)
+    # Dead zone with persistence: signal must be strong for 3h to count
+    raw_strong = signal.abs() > 0.06
+    persistent = raw_strong.rolling(3, min_periods=3).min().fillna(0).astype(bool)
+    signal = signal.where(persistent, 0.0)
 
     # Clip to max position
     signal = signal.clip(-MAX_POSITION, MAX_POSITION)
