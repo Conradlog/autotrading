@@ -13,8 +13,8 @@ import pandas as pd
 # ---------------------------------------------------------------------------
 
 # MA crossover
-FAST_MA = 12                    # fast moving average period (hours)
-SLOW_MA = 48                    # slow moving average period (hours)
+FAST_MA = 10                    # fast moving average period (hours)
+SLOW_MA = 42                    # slow moving average period (hours)
 SPREAD_NORM_WINDOW = 72         # window for normalizing MA spread
 
 # Position sizing
@@ -82,6 +82,13 @@ def generate_signals(features: dict[str, pd.DataFrame]) -> pd.DataFrame:
         signals[asset] = compute_signal(df)
 
     result = pd.DataFrame(signals)
+
+    # --- Drawdown circuit breaker: reduce exposure when recent returns are negative ---
+    for asset in features:
+        ret_48h = features[asset]["close"].pct_change(48)
+        # If asset dropped > 5% in last 48h, halve the signal
+        big_drop = ret_48h < -0.03
+        result.loc[big_drop, asset] = result.loc[big_drop, asset] * 0.5
 
     # --- Correlation filter ---
     if CORRELATION_FILTER and len(features) > 1:
