@@ -61,7 +61,7 @@ def compute_signal(df: pd.DataFrame) -> pd.Series:
     signal = signal * POSITION_SIZE
 
     # Dead zone: zero out very weak signals to avoid noise trades
-    signal = signal.where(signal.abs() > 0.02, 0.0)
+    signal = signal.where(signal.abs() > 0.03, 0.0)
 
     # Clip to max position
     signal = signal.clip(-MAX_POSITION, MAX_POSITION)
