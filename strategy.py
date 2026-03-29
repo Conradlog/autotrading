@@ -81,13 +81,19 @@ def compute_signal(df: pd.DataFrame) -> pd.Series:
 
         position.iloc[i] = current_pos
 
-    # --- Volatility-adjusted sizing ---
+    # --- Fixed size at entry, no continuous vol adjustment ---
+    # Vol scaling only at point of entry (when position changes), not continuously
     if VOL_SCALING and f"volatility_{VOL_LOOKBACK}h" in df.columns:
         vol = df[f"volatility_{VOL_LOOKBACK}h"]
         ann_vol = vol * np.sqrt(8760)
         vol_scalar = VOL_TARGET / ann_vol.replace(0, np.nan)
         vol_scalar = vol_scalar.clip(0.3, 2.0)
-        signal = position * vol_scalar
+        # Only apply vol scaling when position changes (entry/exit)
+        pos_changed = position != position.shift(1)
+        entry_vol = vol_scalar.copy()
+        entry_vol[~pos_changed] = np.nan
+        entry_vol = entry_vol.ffill().fillna(1.0)
+        signal = position * entry_vol
     else:
         signal = position
 
