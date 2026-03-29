@@ -16,10 +16,10 @@ import pandas as pd
 FAST_MA = 12                    # fast MA for trend detection (hours)
 SLOW_MA = 42                    # slow MA for trend detection (hours)
 SPREAD_NORM_WINDOW = 72         # z-score normalization window
-SIGNAL_THRESHOLD = 0.5          # only trade when z-score > this (high conviction)
+SIGNAL_THRESHOLD = 0.6          # only trade when z-score > this (high conviction)
 
 # Position sizing
-POSITION_SIZE = 0.5             # larger positions, fewer trades
+POSITION_SIZE = 0.35            # moderate positions
 VOL_SCALING = True              # scale by inverse volatility
 VOL_LOOKBACK = 24               # hours
 VOL_TARGET = 0.25               # annualized vol target
@@ -27,7 +27,7 @@ MAX_POSITION = 0.8              # max absolute position
 
 # Trade frequency control
 MIN_HOLD_HOURS = 6              # minimum hours between signal changes
-ENTRY_THRESHOLD = 0.5           # z-score to enter (strong signal)
+ENTRY_THRESHOLD = 0.6           # z-score to enter (strong signal)
 EXIT_THRESHOLD = 0.1            # z-score to exit (weak signal = close)
 
 
