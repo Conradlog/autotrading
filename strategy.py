@@ -83,6 +83,13 @@ def generate_signals(features: dict[str, pd.DataFrame]) -> pd.DataFrame:
 
     result = pd.DataFrame(signals)
 
+    # --- Drawdown circuit breaker: reduce exposure when recent returns are negative ---
+    for asset in features:
+        ret_48h = features[asset]["close"].pct_change(48)
+        # If asset dropped > 5% in last 48h, halve the signal
+        big_drop = ret_48h < -0.05
+        result.loc[big_drop, asset] = result.loc[big_drop, asset] * 0.5
+
     # --- Correlation filter ---
     if CORRELATION_FILTER and len(features) > 1:
         assets = list(features.keys())
