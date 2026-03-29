@@ -16,11 +16,12 @@ import pandas as pd
 FAST_MA = 20                    # fast moving average period (hours)
 SLOW_MA = 50                    # slow moving average period (hours)
 TREND_FILTER_PERIOD = 200       # only trade in direction of long-term trend
+USE_TREND_FILTER = False        # disable trend filter
 
 # Mean reversion filter
 RSI_PERIOD = 14                 # RSI lookback
-RSI_OVERBOUGHT = 70             # RSI threshold for overbought
-RSI_OVERSOLD = 30               # RSI threshold for oversold
+RSI_OVERBOUGHT = 75             # RSI threshold for overbought (wider band)
+RSI_OVERSOLD = 25               # RSI threshold for oversold (wider band)
 
 # Position sizing
 POSITION_SIZE = 0.3             # base position size (fraction of capital per signal)
@@ -62,17 +63,15 @@ def compute_signal(df: pd.DataFrame) -> pd.Series:
     trend_signal[fast_ma > slow_ma] = 1.0
     trend_signal[fast_ma < slow_ma] = -1.0
 
-    # --- Long-term trend filter ---
-    trend_ma = c.rolling(TREND_FILTER_PERIOD, min_periods=1).mean()
-    bull_market = c > trend_ma
-    bear_market = c < trend_ma
+    # --- Long-term trend filter (optional) ---
+    if USE_TREND_FILTER:
+        trend_ma = c.rolling(TREND_FILTER_PERIOD, min_periods=1).mean()
+        bull_market = c > trend_ma
+        bear_market = c < trend_ma
+        trend_signal[(trend_signal > 0) & bear_market] = 0.0
+        trend_signal[(trend_signal < 0) & bull_market] = 0.0
 
-    # Only allow longs in bull market, shorts in bear market
-    filtered_signal = trend_signal.copy()
-    filtered_signal[(trend_signal > 0) & bear_market] = 0.0
-    filtered_signal[(trend_signal < 0) & bull_market] = 0.0
-
-    signal = filtered_signal
+    signal = trend_signal
 
     # --- RSI filter: reduce position at extremes ---
     if f"rsi_{RSI_PERIOD}" in df.columns:
