@@ -120,7 +120,7 @@ def generate_signals(features: dict[str, pd.DataFrame]) -> pd.DataFrame:
     if "BTC" in features:
         ret_96h = features["BTC"]["close"].pct_change(96)
         big_drop = ret_96h < -0.05
-        result.loc[big_drop, "BTC"] = result.loc[big_drop, "BTC"] * 0.5
+        result.loc[big_drop, "BTC"] = result.loc[big_drop, "BTC"] * 0.3
 
     # --- Volatility regime scaling ---
     if "BTC" in features:
