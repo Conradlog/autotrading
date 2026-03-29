@@ -26,7 +26,7 @@ RSI_OVERSOLD = 25               # RSI threshold for oversold (wider band)
 # Position sizing
 POSITION_SIZE = 0.3             # base position size (fraction of capital per signal)
 VOL_SCALING = True              # scale position by inverse volatility
-VOL_LOOKBACK = 168              # hours for volatility calculation (7 days)
+VOL_LOOKBACK = 48               # hours for volatility calculation (2 days)
 VOL_TARGET = 0.15               # annualized volatility target
 
 # Risk management
