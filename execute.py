@@ -259,7 +259,7 @@ def run_strategy_live(trader, once: bool = False, interval: int = CHECK_INTERVAL
         try:
             # Refresh data
             print("Downloading latest data...")
-            download_all_data(lookback_days=min(LOOKBACK_DAYS, 30))
+            download_all_data(lookback_days=min(LOOKBACK_DAYS, 30), max_age_hours=0)
 
             # Load features
             features = {}

@@ -161,8 +161,14 @@ def download_funding(asset: str, lookback_days: int = LOOKBACK_DAYS) -> pd.DataF
     return df
 
 
-def download_all_data(assets: list[str] = None, lookback_days: int = LOOKBACK_DAYS):
-    """Download and cache all market data for given assets."""
+def download_all_data(assets: list[str] = None, lookback_days: int = LOOKBACK_DAYS,
+                      max_age_hours: float = 2.0):
+    """Download and cache all market data for given assets.
+
+    Args:
+        max_age_hours: Skip download if cached data is newer than this (default 2h).
+                       Set to 0 to force refresh.
+    """
     if assets is None:
         assets = ASSETS
     os.makedirs(DATA_DIR, exist_ok=True)
@@ -173,12 +179,12 @@ def download_all_data(assets: list[str] = None, lookback_days: int = LOOKBACK_DA
 
         # Check if data exists and is recent enough
         need_download = True
-        if os.path.exists(candle_path):
+        if max_age_hours > 0 and os.path.exists(candle_path):
             existing = pd.read_parquet(candle_path)
             if len(existing) > 0:
                 last_ts = existing["timestamp"].max()
                 hours_old = (pd.Timestamp.now(tz="UTC") - last_ts).total_seconds() / 3600
-                if hours_old < 2:
+                if hours_old < max_age_hours:
                     print(f"  [{asset}] Candles already up-to-date (last: {last_ts})")
                     need_download = False
                 else:
