@@ -50,6 +50,9 @@ def compute_signal(df: pd.DataFrame) -> pd.Series:
     # --- MACD confirmation ---
     macd_hist = df["macd_histogram"] if "macd_histogram" in df.columns else pd.Series(0.0, index=df.index)
 
+    # --- RSI filter ---
+    rsi = df["rsi_14"] if "rsi_14" in df.columns else pd.Series(50.0, index=df.index)
+
     # --- Hysteresis: enter strong, exit weak ---
     position = pd.Series(0.0, index=df.index)
     current_pos = 0.0
@@ -57,20 +60,21 @@ def compute_signal(df: pd.DataFrame) -> pd.Series:
     for i in range(len(df)):
         z = zscore.iloc[i]
         mh = macd_hist.iloc[i]
+        r = rsi.iloc[i]
 
         if current_pos == 0:
-            # Only enter if MACD confirms direction
-            if z > ENTRY_THRESHOLD and mh > 0:
+            # Only enter if MACD confirms and RSI not extreme against us
+            if z > ENTRY_THRESHOLD and mh > 0 and r < 75:
                 current_pos = 1.0
-            elif z < -ENTRY_THRESHOLD and mh < 0:
+            elif z < -ENTRY_THRESHOLD and mh < 0 and r > 25:
                 current_pos = -1.0
         elif current_pos > 0:
-            if z < -ENTRY_THRESHOLD and mh < 0:
+            if z < -ENTRY_THRESHOLD and mh < 0 and r > 25:
                 current_pos = -1.0       # reverse to short
             elif z < -EXIT_THRESHOLD:
                 current_pos = 0.0        # exit long
         elif current_pos < 0:
-            if z > ENTRY_THRESHOLD and mh > 0:
+            if z > ENTRY_THRESHOLD and mh > 0 and r < 75:
                 current_pos = 1.0        # reverse to long
             elif z > EXIT_THRESHOLD:
                 current_pos = 0.0        # exit short
