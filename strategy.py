@@ -55,13 +55,14 @@ def compute_signal(df: pd.DataFrame) -> pd.Series:
     c = df["close"]
     signal = pd.Series(0.0, index=df.index)
 
-    # --- Trend signal: MA crossover ---
+    # --- Trend signal: continuous MA spread ---
     fast_ma = c.rolling(FAST_MA, min_periods=1).mean()
     slow_ma = c.rolling(SLOW_MA, min_periods=1).mean()
 
-    trend_signal = pd.Series(0.0, index=df.index)
-    trend_signal[fast_ma > slow_ma] = 1.0
-    trend_signal[fast_ma < slow_ma] = -1.0
+    # Normalize spread by recent volatility for a continuous [-1, 1] signal
+    ma_spread = (fast_ma - slow_ma) / slow_ma
+    spread_std = ma_spread.rolling(48, min_periods=12).std().replace(0, np.nan)
+    trend_signal = (ma_spread / spread_std).clip(-2, 2) / 2
 
     # --- Long-term trend filter (optional) ---
     if USE_TREND_FILTER:
