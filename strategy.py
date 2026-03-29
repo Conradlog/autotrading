@@ -60,17 +60,17 @@ def compute_signal(df: pd.DataFrame) -> pd.Series:
 
         if current_pos == 0:
             if z > ENTRY_THRESHOLD and mh > 0:
-                current_pos = min(abs(z), 3.0) / 3.0  # continuous: 0.2 to 1.0
+                current_pos = min(abs(z), 4.0) / 4.0  # continuous: 0.2 to 1.0
             elif z < -ENTRY_THRESHOLD and mh < 0:
-                current_pos = -min(abs(z), 3.0) / 3.0
+                current_pos = -min(abs(z), 4.0) / 4.0
         elif current_pos > 0:
             if z < -ENTRY_THRESHOLD and mh < 0:
-                current_pos = -min(abs(z), 3.0) / 3.0
+                current_pos = -min(abs(z), 4.0) / 4.0
             elif z < -EXIT_THRESHOLD:
                 current_pos = 0.0        # exit long
         elif current_pos < 0:
             if z > ENTRY_THRESHOLD and mh > 0:
-                current_pos = min(abs(z), 3.0) / 3.0
+                current_pos = min(abs(z), 4.0) / 4.0
             elif z > EXIT_THRESHOLD:
                 current_pos = 0.0        # exit short
 
