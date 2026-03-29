@@ -47,7 +47,7 @@ def compute_signal(df: pd.DataFrame) -> pd.Series:
     ma_spread = (fast_line - slow_line) / slow_line
 
     spread_std = ma_spread.rolling(SPREAD_NORM_WINDOW, min_periods=12).std().replace(0, np.nan)
-    signal = (ma_spread / spread_std).clip(-2, 2) / 2
+    signal = (ma_spread / spread_std).clip(-2.5, 2.5) / 2.5
 
     # --- Volatility-adjusted position sizing ---
     if VOL_SCALING and f"volatility_{VOL_LOOKBACK}h" in df.columns:
