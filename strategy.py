@@ -87,7 +87,7 @@ def generate_signals(features: dict[str, pd.DataFrame]) -> pd.DataFrame:
     for asset in features:
         ret_48h = features[asset]["close"].pct_change(48)
         # If asset dropped > 5% in last 48h, halve the signal
-        big_drop = ret_48h < -0.05
+        big_drop = ret_48h < -0.03
         result.loc[big_drop, asset] = result.loc[big_drop, asset] * 0.5
 
     # --- Correlation filter ---
