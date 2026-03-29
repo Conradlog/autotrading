@@ -60,7 +60,7 @@ def compute_signal(df: pd.DataFrame) -> pd.Series:
         vol = df[f"volatility_{VOL_LOOKBACK}h"]
         ann_vol = vol * np.sqrt(8760)
         vol_scalar = VOL_TARGET / ann_vol.replace(0, np.nan)
-        vol_scalar = vol_scalar.clip(0.2, 3.0)
+        vol_scalar = vol_scalar.clip(0.2, 2.5)
         signal = signal * vol_scalar
 
     # Apply base position size
