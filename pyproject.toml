@@ -1,0 +1,15 @@
+[project]
+name = "autotrading"
+version = "0.1.0"
+description = "Autonomous trading strategy optimization via HyperLiquid"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "hyperliquid-python-sdk>=0.4.0",
+    "pandas>=2.2.0",
+    "numpy>=2.0.0",
+    "pyarrow>=15.0.0",
+    "matplotlib>=3.8.0",
+    "torch>=2.2.0",
+    "requests>=2.31.0",
+]
