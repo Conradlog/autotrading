@@ -22,7 +22,7 @@ ENTRY_THRESHOLD = 0.6           # z-score to enter (strong signal)
 EXIT_THRESHOLD = 0.1            # z-score to exit (weak signal)
 
 # Position sizing
-POSITION_SIZE = 0.30            # fraction of capital per signal
+POSITION_SIZE = 0.25            # fraction of capital per signal
 VOL_SCALING = True              # adjust size by volatility
 VOL_LOOKBACK = 24               # hours
 VOL_TARGET = 0.16               # annualized vol target
