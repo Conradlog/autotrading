@@ -83,12 +83,22 @@ def generate_signals(features: dict[str, pd.DataFrame]) -> pd.DataFrame:
 
     result = pd.DataFrame(signals)
 
-    # --- Drawdown circuit breaker: reduce exposure when recent returns are negative ---
+    # --- Drawdown circuit breaker ---
     for asset in features:
         ret_48h = features[asset]["close"].pct_change(48)
-        # If asset dropped > 5% in last 48h, halve the signal
         big_drop = ret_48h < -0.03
         result.loc[big_drop, asset] = result.loc[big_drop, asset] * 0.5
+
+    # --- Volatility regime scaling ---
+    for asset in features:
+        if "volatility_168h" in features[asset].columns:
+            vol_7d = features[asset]["volatility_168h"]
+            vol_30d = features[asset]["volatility_720h"] if "volatility_720h" in features[asset].columns else vol_7d
+            vol_ratio = vol_7d / vol_30d.replace(0, np.nan)
+            # High vol regime (vol_ratio > 1.5): reduce exposure
+            # Low vol regime (vol_ratio < 0.7): boost exposure
+            regime_scale = (1.0 / vol_ratio.clip(0.5, 2.0)).fillna(1.0)
+            result[asset] = result[asset] * regime_scale
 
     # --- Correlation filter ---
     if CORRELATION_FILTER and len(features) > 1:
