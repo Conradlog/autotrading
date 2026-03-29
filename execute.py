@@ -258,58 +258,52 @@ def run_strategy_live(trader, once: bool = False, interval: int = CHECK_INTERVAL
         print(f"{'='*60}")
 
         try:
-            # Refresh 1h candles into separate live files
-            print(f"Downloading latest data (1h candles)...")
+            # Only trade BTC — download 1h candles + funding
+            from prepare import download_candles, download_funding, DATA_DIR
             live_lookback = min(LOOKBACK_DAYS, 90)
-            for asset in ASSETS:
-                from prepare import download_candles, download_funding, DATA_DIR, CANDLE_INTERVAL
-                import os
+            trade_assets = ["BTC"]  # BTC only
+
+            print(f"Downloading BTC data (1h candles, {live_lookback} days)...")
+            features = {}
+            prices = {}
+            for asset in trade_assets:
                 candle_path = os.path.join(DATA_DIR, f"{asset}_candles_live.parquet")
                 funding_path = os.path.join(DATA_DIR, f"{asset}_funding.parquet")
+
                 candles_df = download_candles(asset, live_lookback, interval="1h")
                 if len(candles_df) > 0:
                     candles_df.to_parquet(candle_path, index=False)
-                # Funding already shared, skip if recent
-                if not os.path.exists(funding_path):
-                    funding_df = download_funding(asset, live_lookback)
-                    if len(funding_df) > 0:
-                        funding_df.to_parquet(funding_path, index=False)
 
-            # Load features from live files
-            features = {}
-            prices = {}
-            for asset in ASSETS:
-                import os
-                from prepare import DATA_DIR
-                candle_path = os.path.join(DATA_DIR, f"{asset}_candles_live.parquet")
-                funding_path = os.path.join(DATA_DIR, f"{asset}_funding.parquet")
+                funding_df = download_funding(asset, live_lookback)
+                if len(funding_df) > 0:
+                    funding_df.to_parquet(funding_path, index=False)
+
+                # Load and merge
                 df = pd.read_parquet(candle_path)
                 df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
                 if os.path.exists(funding_path):
-                    funding = pd.read_parquet(funding_path)
-                    funding["timestamp"] = pd.to_datetime(funding["timestamp"], utc=True)
+                    fund = pd.read_parquet(funding_path)
+                    fund["timestamp"] = pd.to_datetime(fund["timestamp"], utc=True)
                     df = pd.merge_asof(df.sort_values("timestamp"),
-                                       funding[["timestamp", "funding_rate", "premium"]].sort_values("timestamp"),
+                                       fund[["timestamp", "funding_rate", "premium"]].sort_values("timestamp"),
                                        on="timestamp", direction="backward")
                     df["funding_rate"] = df["funding_rate"].fillna(0.0)
                     df["premium"] = df["premium"].fillna(0.0)
                 else:
                     df["funding_rate"] = 0.0
                     df["premium"] = 0.0
-                df = df.reset_index(drop=True)
-                df_feat = compute_base_features(df)
-                df_feat = df_feat.set_index("timestamp")
-                df_feat = compute_base_features(df)
+
+                df_feat = compute_base_features(df.reset_index(drop=True))
                 df_feat = df_feat.set_index("timestamp")
                 features[asset] = df_feat
                 prices[asset] = df_feat["close"].iloc[-1]
 
-            # Generate signals
+            # Generate signals (strategy handles ETH=0 internally)
             signals_df = strategy.generate_signals(features)
             latest_signals = signals_df.iloc[-1]
 
             print(f"\nLatest signals:")
-            for asset in ASSETS:
+            for asset in trade_assets:
                 sig = latest_signals.get(asset, 0.0)
                 direction = "LONG" if sig > 0.01 else ("SHORT" if sig < -0.01 else "FLAT")
                 print(f"  {asset}: {sig:+.4f} ({direction})")
@@ -324,7 +318,7 @@ def run_strategy_live(trader, once: bool = False, interval: int = CHECK_INTERVAL
 
             if daily_pnl_pct < -MAX_DAILY_LOSS_PCT:
                 print(f"\n*** KILL SWITCH: Daily loss ({daily_pnl_pct:.1f}%) exceeds limit ({MAX_DAILY_LOSS_PCT}%). Flattening all positions. ***")
-                for asset in ASSETS:
+                for asset in trade_assets:
                     trader.execute_trade(asset, 0.0, prices.get(asset, 0))
                 if once:
                     break
@@ -333,7 +327,7 @@ def run_strategy_live(trader, once: bool = False, interval: int = CHECK_INTERVAL
                 continue
 
             # Execute trades
-            for asset in ASSETS:
+            for asset in trade_assets:
                 sig = latest_signals.get(asset, 0.0)
                 price = prices.get(asset, 0)
                 if price == 0:
