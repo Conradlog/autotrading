@@ -20,7 +20,7 @@ SPREAD_NORM_WINDOW = 72         # window for normalizing MA spread
 # Position sizing
 POSITION_SIZE = 0.3             # base position size (fraction of capital per signal)
 VOL_SCALING = True              # scale position by inverse volatility
-VOL_LOOKBACK = 48               # hours for volatility calculation
+VOL_LOOKBACK = 24               # hours for volatility calculation
 VOL_TARGET = 0.25               # annualized volatility target
 MAX_POSITION = 0.5              # max absolute position per asset
 
