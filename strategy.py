@@ -14,7 +14,7 @@ import pandas as pd
 
 # MA crossover
 FAST_MA = 10                    # fast moving average period (hours)
-SLOW_MA = 48                    # slow moving average period (hours)
+SLOW_MA = 42                    # slow moving average period (hours)
 SPREAD_NORM_WINDOW = 72         # window for normalizing MA spread
 
 # Position sizing
