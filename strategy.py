@@ -119,7 +119,7 @@ def generate_signals(features: dict[str, pd.DataFrame]) -> pd.DataFrame:
 
         high_corr = rolling_corr.abs() > CORRELATION_THRESHOLD
         for asset in assets:
-            result.loc[high_corr, asset] = result.loc[high_corr, asset] * 0.5
+            result.loc[high_corr, asset] = result.loc[high_corr, asset] * 0.6
 
     return result
 
