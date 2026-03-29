@@ -1,7 +1,6 @@
 """
-Autotrading strategy — BTC SPOT only, no leverage, no liquidation.
-Signal: 0 = all USDC (flat), 1 = all BTC (max long).
-No shorting. No leverage. No liquidation risk.
+Autotrading strategy — BTC perpetual futures, 3x leverage.
+Can go long, short, or flat. $500 capital.
 
 Usage: uv run strategy.py
 """
@@ -18,15 +17,16 @@ FAST_MA = 12                    # fast MA (hours)
 SLOW_MA = 42                    # slow MA (hours)
 SPREAD_NORM_WINDOW = 72         # z-score normalization window
 
-# Entry/exit thresholds (hysteresis to avoid whipsaw)
-ENTRY_THRESHOLD = 0.5           # z-score to buy BTC (strong uptrend)
-EXIT_THRESHOLD = -0.1           # z-score to sell BTC (trend weakening)
+# Entry/exit thresholds (hysteresis)
+ENTRY_THRESHOLD = 0.6           # z-score to enter (strong signal)
+EXIT_THRESHOLD = 0.1            # z-score to exit (weak signal)
 
 # Position sizing
-BASE_POSITION = 0.7             # fraction of capital to deploy when signal is on
+POSITION_SIZE = 0.35            # fraction of capital per signal
 VOL_SCALING = True              # adjust size by volatility
 VOL_LOOKBACK = 24               # hours
-VOL_TARGET = 0.30               # annualized vol target (higher for spot, no liquidation)
+VOL_TARGET = 0.25               # annualized vol target
+MAX_POSITION = 0.8              # max absolute position
 
 
 # ---------------------------------------------------------------------------
@@ -35,8 +35,8 @@ VOL_TARGET = 0.30               # annualized vol target (higher for spot, no liq
 
 def compute_signal(df: pd.DataFrame) -> pd.Series:
     """
-    BTC spot signal: 0 = flat (USDC), positive = long BTC.
-    Uses hysteresis (different entry/exit thresholds) to minimize trades.
+    BTC perp signal with hysteresis.
+    +1 = long, -1 = short, 0 = flat.
     """
     c = df["close"]
 
@@ -47,51 +47,53 @@ def compute_signal(df: pd.DataFrame) -> pd.Series:
     spread_std = ma_spread.rolling(SPREAD_NORM_WINDOW, min_periods=12).std().replace(0, np.nan)
     zscore = (ma_spread / spread_std).fillna(0)
 
-    # --- Hysteresis: buy on strong uptrend, sell when trend fades ---
+    # --- Hysteresis: enter strong, exit weak ---
     position = pd.Series(0.0, index=df.index)
-    in_position = False
+    current_pos = 0.0
 
     for i in range(len(df)):
         z = zscore.iloc[i]
 
-        if not in_position:
-            # Flat: buy only when strong uptrend confirmed
+        if current_pos == 0:
             if z > ENTRY_THRESHOLD:
-                in_position = True
-        else:
-            # Long: exit when trend weakens
+                current_pos = 1.0
+            elif z < -ENTRY_THRESHOLD:
+                current_pos = -1.0
+        elif current_pos > 0:
             if z < EXIT_THRESHOLD:
-                in_position = False
+                current_pos = 0.0
+            if z < -ENTRY_THRESHOLD:
+                current_pos = -1.0
+        elif current_pos < 0:
+            if z > -EXIT_THRESHOLD:
+                current_pos = 0.0
+            if z > ENTRY_THRESHOLD:
+                current_pos = 1.0
 
-        position.iloc[i] = 1.0 if in_position else 0.0
+        position.iloc[i] = current_pos
 
-    # --- Volatility-adjusted sizing (at entry only) ---
+    # --- Vol sizing at entry only ---
     if VOL_SCALING and f"volatility_{VOL_LOOKBACK}h" in df.columns:
         vol = df[f"volatility_{VOL_LOOKBACK}h"]
         ann_vol = vol * np.sqrt(8760)
         vol_scalar = VOL_TARGET / ann_vol.replace(0, np.nan)
-        vol_scalar = vol_scalar.clip(0.3, 1.5)
-
-        # Freeze vol scaling at entry (don't change while holding)
+        vol_scalar = vol_scalar.clip(0.3, 2.0)
         pos_changed = position != position.shift(1)
         entry_vol = vol_scalar.copy()
         entry_vol[~pos_changed] = np.nan
         entry_vol = entry_vol.ffill().fillna(1.0)
-        signal = position * entry_vol * BASE_POSITION
+        signal = position * entry_vol
     else:
-        signal = position * BASE_POSITION
+        signal = position
 
-    # Cap at 1.0 (can't invest more than 100% in spot)
-    signal = signal.clip(0.0, 1.0)
+    signal = signal * POSITION_SIZE
+    signal = signal.clip(-MAX_POSITION, MAX_POSITION)
 
     return signal
 
 
 def generate_signals(features: dict[str, pd.DataFrame]) -> pd.DataFrame:
-    """
-    Generate signals. Only BTC spot — ETH flat.
-    Signal 0 = hold USDC, signal > 0 = hold BTC.
-    """
+    """BTC only. ETH flat."""
     signals = {}
 
     if "BTC" in features:
@@ -100,11 +102,29 @@ def generate_signals(features: dict[str, pd.DataFrame]) -> pd.DataFrame:
     if "ETH" in features:
         signals["ETH"] = pd.Series(0.0, index=features["ETH"].index)
 
-    return pd.DataFrame(signals)
+    result = pd.DataFrame(signals)
+
+    # --- Circuit breaker ---
+    if "BTC" in features:
+        ret_96h = features["BTC"]["close"].pct_change(96)
+        big_drop = ret_96h < -0.05
+        result.loc[big_drop, "BTC"] = result.loc[big_drop, "BTC"] * 0.5
+
+    # --- Volatility regime scaling ---
+    if "BTC" in features:
+        df = features["BTC"]
+        if "volatility_168h" in df.columns and "volatility_720h" in df.columns:
+            vol_7d = df["volatility_168h"]
+            vol_30d = df["volatility_720h"]
+            vol_ratio = vol_7d / vol_30d.replace(0, np.nan)
+            regime_scale = (1.0 / vol_ratio.clip(0.5, 2.0)).fillna(1.0)
+            result["BTC"] = result["BTC"] * regime_scale
+
+    return result
 
 
 # ---------------------------------------------------------------------------
-# Main: evaluate and print results
+# Main
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":

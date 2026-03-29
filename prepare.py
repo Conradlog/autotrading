@@ -39,10 +39,10 @@ CANDLE_INTERVAL_MS = 3600_000   # 1 hour in milliseconds
 ASSETS = ["BTC", "ETH"]
 
 INITIAL_CAPITAL = 500.0         # USD starting capital (realistic for live)
-MAX_LEVERAGE = 1.0              # SPOT only, no leverage, no liquidation
-COMMISSION_BPS = 2.0            # HyperLiquid spot taker fee (~0.02%)
+MAX_LEVERAGE = 3.0              # perpetual futures, 3x leverage
+COMMISSION_BPS = 3.5            # HyperLiquid perp taker fee
 SLIPPAGE_BPS = 2.0              # estimated slippage per trade
-FUNDING_RATE_INTERVAL_H = 8    # not used in spot (no funding)
+FUNDING_RATE_INTERVAL_H = 8    # HyperLiquid funding rate interval
 
 CACHE_DIR = os.path.join(os.path.expanduser("~"), ".cache", "autotrading")
 DATA_DIR = os.path.join(CACHE_DIR, "data")
