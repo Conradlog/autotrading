@@ -258,8 +258,9 @@ def run_strategy_live(trader, once: bool = False, interval: int = CHECK_INTERVAL
         print(f"{'='*60}")
 
         try:
-            # Refresh data (5m candles for live trading)
-            print(f"Downloading latest data ({LIVE_CANDLE_INTERVAL} candles)...")
+            # Refresh data: download 5m candles for freshness, resample to 1h
+            # so the strategy sees the same timeframe as backtesting
+            print(f"Downloading latest data ({LIVE_CANDLE_INTERVAL} candles, resampled to 1h)...")
             download_all_data(lookback_days=min(LOOKBACK_DAYS, 30),
                               max_age_hours=0, interval=LIVE_CANDLE_INTERVAL)
 
@@ -267,11 +268,28 @@ def run_strategy_live(trader, once: bool = False, interval: int = CHECK_INTERVAL
             features = {}
             prices = {}
             for asset in ASSETS:
-                df = load_market_data(asset, interval=LIVE_CANDLE_INTERVAL)
-                df_feat = compute_base_features(df)
+                df_5m = load_market_data(asset, interval=LIVE_CANDLE_INTERVAL)
+
+                # Resample 5m -> 1h (matching backtest timeframe)
+                df_5m = df_5m.set_index("timestamp")
+                df_1h = df_5m.resample("1h").agg({
+                    "open": "first",
+                    "high": "max",
+                    "low": "min",
+                    "close": "last",
+                    "volume": "sum",
+                    "num_trades": "sum",
+                    "funding_rate": "last",
+                    "premium": "last",
+                }).dropna(subset=["close"]).reset_index()
+
+                # Latest live price (from most recent 5m candle)
+                live_price = df_5m["close"].iloc[-1]
+
+                df_feat = compute_base_features(df_1h)
                 df_feat = df_feat.set_index("timestamp")
                 features[asset] = df_feat
-                prices[asset] = df_feat["close"].iloc[-1]
+                prices[asset] = live_price
 
             # Generate signals
             signals_df = strategy.generate_signals(features)
