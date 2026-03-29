@@ -14,7 +14,7 @@ import pandas as pd
 
 # Trend detection
 FAST_MA = 12                    # fast MA (hours)
-SLOW_MA = 42                    # slow MA (hours)
+SLOW_MA = 48                    # slow MA (hours)
 SPREAD_NORM_WINDOW = 72         # z-score normalization window
 
 # Entry/exit thresholds (hysteresis)
