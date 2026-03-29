@@ -38,7 +38,7 @@ CANDLE_INTERVAL_MS = 3600_000   # 1 hour in milliseconds
 # Default tradeable assets — agent cannot change this list
 ASSETS = ["BTC", "ETH"]
 
-INITIAL_CAPITAL = 100_000.0     # USD starting capital for backtest
+INITIAL_CAPITAL = 500.0         # USD starting capital (realistic for live)
 MAX_LEVERAGE = 3.0              # hard cap on leverage
 COMMISSION_BPS = 3.5            # round-trip commission in basis points (HyperLiquid taker)
 SLIPPAGE_BPS = 2.0              # estimated slippage per trade
