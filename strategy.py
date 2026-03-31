@@ -96,15 +96,6 @@ def compute_signal(df: pd.DataFrame) -> pd.Series:
     # --- Long-only: zero out all shorts ---
     signal = signal.clip(lower=0)
 
-    # --- RSI position dampener: reduce when overbought/oversold ---
-    if "rsi_14" in df.columns:
-        rsi = df["rsi_14"].fillna(50)
-        rsi_scale = pd.Series(1.0, index=df.index)
-        # Dampen longs when RSI > 70, shorts when RSI < 30
-        rsi_scale = rsi_scale.where(~((signal > 0) & (rsi > 70)), 0.2)
-        rsi_scale = rsi_scale.where(~((signal < 0) & (rsi < 30)), 0.2)
-        signal = signal * rsi_scale
-
     signal = signal * POSITION_SIZE
     signal = signal.clip(-MAX_POSITION, MAX_POSITION)
 
