@@ -93,9 +93,8 @@ def compute_signal(df: pd.DataFrame) -> pd.Series:
     else:
         signal = position
 
-    # --- Asymmetric sizing: shorts slightly smaller (crash risk) ---
-    short_mask = signal < 0
-    signal[short_mask] = signal[short_mask] * 0.3
+    # --- Long-only: zero out all shorts ---
+    signal = signal.clip(lower=0)
 
     # --- RSI position dampener: reduce when overbought/oversold ---
     if "rsi_14" in df.columns:
