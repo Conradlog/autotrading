@@ -95,7 +95,7 @@ def compute_signal(df: pd.DataFrame) -> pd.Series:
 
     # --- Asymmetric sizing: shorts slightly smaller (crash risk) ---
     short_mask = signal < 0
-    signal[short_mask] = signal[short_mask] * 0.7
+    signal[short_mask] = signal[short_mask] * 0.3
 
     # --- RSI position dampener: reduce when overbought/oversold ---
     if "rsi_14" in df.columns:
@@ -155,7 +155,9 @@ if __name__ == "__main__":
     from prepare import evaluate_strategy
 
     t0 = _time.time()
-    results = evaluate_strategy(strategy_module=__import__(__name__), split="val")
+    import sys
+    ds = "extended" if "--extended" in sys.argv else "default"
+    results = evaluate_strategy(strategy_module=__import__(__name__), split="val", dataset=ds)
     t1 = _time.time()
 
     print("---")

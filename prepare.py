@@ -214,11 +214,12 @@ def download_all_data(assets: list[str] = None, lookback_days: int = LOOKBACK_DA
                 funding_df.to_parquet(funding_path, index=False)
 
 
-def load_market_data(asset: str, interval: str = CANDLE_INTERVAL) -> pd.DataFrame:
+def load_market_data(asset: str, interval: str = CANDLE_INTERVAL, dataset: str = "default") -> pd.DataFrame:
     """Load cached market data and merge candles with funding rates."""
     suffix = f"_{interval}" if interval != CANDLE_INTERVAL else ""
-    candle_path = os.path.join(DATA_DIR, f"{asset}_candles{suffix}.parquet")
-    funding_path = os.path.join(DATA_DIR, f"{asset}_funding.parquet")
+    ds_suffix = f"_{dataset}" if dataset != "default" else ""
+    candle_path = os.path.join(DATA_DIR, f"{asset}_candles{suffix}{ds_suffix}.parquet")
+    funding_path = os.path.join(DATA_DIR, f"{asset}_funding{ds_suffix}.parquet")
 
     if not os.path.exists(candle_path):
         raise FileNotFoundError(
@@ -633,7 +634,7 @@ class BacktestEngine:
 # Strategy Evaluation (DO NOT CHANGE — this is the fixed metric)
 # ---------------------------------------------------------------------------
 
-def evaluate_strategy(strategy_module, split: str = "val") -> dict:
+def evaluate_strategy(strategy_module, split: str = "val", dataset: str = "default") -> dict:
     """
     Fixed evaluation harness. DO NOT CHANGE.
 
@@ -657,7 +658,7 @@ def evaluate_strategy(strategy_module, split: str = "val") -> dict:
     funding = {}
 
     for asset in ASSETS:
-        df = load_market_data(asset)
+        df = load_market_data(asset, dataset=dataset)
         df_feat = compute_base_features(df)
 
         # Temporal split
